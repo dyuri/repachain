@@ -4,9 +4,12 @@ TESTCASES = [
     ('', 'sha256'),
     ('', 'sha3_512'),
     ('', 'scrypt'),
+    ('a', 'sha256'),
+    ('a', 'sha3_512'),
+    ('a', 'scrypt'),
     ('abc', 'sha256'),
     ('abc', 'sha3_512'),
-    ('abc', 'scrypt'),
+    # ('abc', 'scrypt'),  # well...
 ]
 
 for tc in TESTCASES:

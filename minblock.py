@@ -1,10 +1,10 @@
 import datetime
 import copy
 import json
-import logging
+import gzip
 import sys
 
-from typing import Callable, Union, List, Any
+from typing import Callable, Optional, Union, List, Any
 
 
 def int_to_bytes(n: int) -> bytes:
@@ -43,6 +43,10 @@ def get_scrypt() -> Callable[[List[bytes], bytes], str]:
     return hashfunc
 
 
+class InvalidBlockException(Exception):
+    pass
+
+
 class MinBlock():
 
     def __init__(
@@ -51,6 +55,8 @@ class MinBlock():
             timestamp: datetime.datetime,
             data: str,
             previous_hash: str,
+            *,
+            hash: str = None,
             nonce: int = 0,
             algorithm: Callable[[List[bytes], bytes], Any] = get_hashlib_alg('sha256'),
             check_hash: Callable[[str], bool] = lambda x: True,
@@ -64,7 +70,15 @@ class MinBlock():
         self.check_hash = check_hash
         self.next_nonce = next_nonce
 
-        self.hash = self.hashing()
+        if hash:
+            self.hash = hash
+            self.verify()
+        else:
+            self.hash = self.hashing()
+
+    def verify(self):
+        if self.hash != self.calculate_hash():
+            raise InvalidBlockException("Wrong hash")
 
     def calculate_hash(self) -> str:
         return self.algorithm(
@@ -135,13 +149,10 @@ class MinChain():
 
         return alg
 
-    def log(self, message: str) -> None:
-        # TODO
-        print(message)
-
     def get_genesis_block(self) -> MinBlock:
         genesis_data = {
             "algorithm": self.algorithm,
+            "hashending": self.hashending,
             "version": self.VERSION
         }
         return MinBlock(
@@ -165,7 +176,8 @@ class MinChain():
             )
         )
 
-    def get_chain_size(self) -> int:
+    @property
+    def chain_size(self) -> int:
         # exclude genesys block
         return len(self.blocks) - 1
 
@@ -173,29 +185,84 @@ class MinChain():
         prevblock = None
         for i, block in enumerate(self.blocks):
             if i == 0:
-                # skip genesis block
+                # check version and algorithm
+                try:
+                    bdata = json.loads(block.data)
+                    if bdata["version"] != self.VERSION:
+                        raise InvalidBlockException(f'Wrong chain version "{bdata.version}"')
+                    if bdata["algorithm"] != self.algorithm:
+                        raise InvalidBlockException(f'Wrong algorithm "{bdata.algorithm}"')
+                except (json.decoder.JSONDecodeError, KeyError):
+                    raise InvalidBlockException('Invalid genesis block')
+
                 prevblock = block
                 continue
 
             if prevblock:
                 if block.index != i:
-                    self.log(f'Wrong block index at block {i}')
-                    return False
+                    raise InvalidBlockException(f'Wrong block index at block {i}')
                 if prevblock.hash != block.previous_hash:
-                    self.log(f'Wrong previous hash at block {i}')
-                    return False
+                    raise InvalidBlockException(f'Wrong previous hash at block {i}')
                 if block.hash != block.hashing():
-                    self.log(f'Wrong hash at block {i}')
-                    return False
+                    raise InvalidBlockException(f'Wrong hash at block {i}')
                 if prevblock.timestamp > block.timestamp:
-                    self.log(f'Backdating at block {i}')
+                    raise InvalidBlockException(f'Backdating at block {i}')
             else:
-                self.log(f'Empty')
-                return False
+                raise InvalidBlockException(f'Empty')
 
             prevblock = block
 
         return True
+
+    def serialize(self) -> List[dict]:
+        return [block.as_dict() for block in self.blocks]
+
+    def deserialize(self, data: List[dict]) -> None:
+        self.blocks = []
+        try:
+            genesis = json.loads(data[0]["data"])
+            self.algorithm = genesis["algorithm"]
+            self.hashending = genesis["hashending"]
+            if self.VERSION != genesis["version"]:
+                raise InvalidBlockException(f'Incompatible chain version "{genesis.version}"')
+        except (json.decoder.JSONDecodeError, KeyError):
+            raise InvalidBlockException("Invalid genesis data")
+
+        for block in data:
+            self.blocks.append(
+                MinBlock(
+                    block['index'],
+                    datetime.datetime.fromtimestamp(block['timestamp']),
+                    block['data'],
+                    block['previous_hash'],
+                    hash=block['hash'],
+                    nonce=block['nonce'],
+                    algorithm=self._get_algorithm(),
+                    check_hash=self._check_hash
+                )
+            )
+
+    def to_json(self) -> str:
+        return json.dumps(self.serialize())
+
+    def to_json_file(self, file: str) -> None:
+        with gzip.open(file, 'wt', encoding="ascii") as jsonfile:
+            json.dump(self.serialize(), jsonfile)
+
+    @classmethod
+    def from_json(cls, jsondata: str) -> 'MinChain':
+        self = cls()
+        self.deserialize(json.loads(jsondata))
+
+        return self
+
+    @classmethod
+    def from_json_file(cls, file: str) -> 'MinChain':
+        self = cls()
+        with gzip.open(file, 'rt', encoding="ascii") as jsonfile:
+            self.deserialize(json.load(jsonfile))
+
+        return self
 
     def fork(self, head: Union[str, int] = 'latest') -> 'MinChain':
         if head in ['latest', 'whole', 'all']:
@@ -207,7 +274,7 @@ class MinChain():
         return forked
 
     def get_root(self, chain: 'MinChain') -> 'MinChain':
-        min_chain_size = min(self.get_chain_size(), chain.get_chain_size())
+        min_chain_size = min(self.chain_size, chain.chain_size)
         for i in range(1, min_chain_size):
             if self.blocks[i] != chain.blocks[i]:
                 return self.fork(i - 1)
