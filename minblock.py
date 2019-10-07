@@ -1,12 +1,46 @@
-import hashlib
 import datetime
 import copy
+import json
+import logging
+import sys
 
-from typing import Callable, Union
+from typing import Callable, Union, List, Any
 
 
 def int_to_bytes(n: int) -> bytes:
     return n.to_bytes((n.bit_length() + 7) // 8, 'big')
+
+
+def get_hashlib_alg(algname: str) -> Callable[[List[bytes], bytes], str]:
+    import hashlib
+
+    alg = getattr(hashlib, algname, None)
+
+    if not alg:
+        sys.exit(f"Cannot use '{algname}' algorithm...")
+
+    def hashfunc(data: List[bytes], nonce: bytes = b'') -> str:
+        key = alg()
+        for value in data:
+            key.update(value)
+
+        key.update(nonce)
+
+        return key.hexdigest()
+
+    return hashfunc
+
+
+def get_scrypt() -> Callable[[List[bytes], bytes], str]:
+    try:
+        import scrypt
+    except ImportError:
+        sys.exit("Cannot import 'scrypt'...")
+
+    def hashfunc(data: List[bytes], nonce: bytes = b'') -> str:
+        return scrypt.hash(b'|'.join(data), nonce).hex()
+
+    return hashfunc
 
 
 class MinBlock():
@@ -18,6 +52,7 @@ class MinBlock():
             data: str,
             previous_hash: str,
             nonce: int = 0,
+            algorithm: Callable[[List[bytes], bytes], Any] = get_hashlib_alg('sha256'),
             check_hash: Callable[[str], bool] = lambda x: True,
             next_nonce: Callable[[int], int] = lambda n: n + 1) -> None:
         self.index = index
@@ -25,20 +60,22 @@ class MinBlock():
         self.data = data
         self.previous_hash = previous_hash
         self.nonce = nonce
+        self.algorithm = algorithm
         self.check_hash = check_hash
         self.next_nonce = next_nonce
 
         self.hash = self.hashing()
 
     def calculate_hash(self) -> str:
-        key = hashlib.sha256()
-        key.update(str(self.index).encode('utf-8'))
-        key.update(str(self.timestamp).encode('utf-8'))
-        key.update(str(self.data).encode('utf-8'))
-        key.update(str(self.previous_hash).encode('utf-8'))
-        key.update(int_to_bytes(self.nonce))
-
-        return key.hexdigest()
+        return self.algorithm(
+            [
+                str(self.index).encode('utf-8'),
+                str(self.timestamp).encode('utf-8'),
+                str(self.data).encode('utf-8'),
+                str(self.previous_hash).encode('utf-8')
+            ],
+            int_to_bytes(self.nonce)
+        )
 
     def hashing(self) -> str:
         key = self.calculate_hash()
@@ -70,8 +107,19 @@ class MinBlock():
 # - save / restore
 class MinChain():
 
-    def __init__(self, hashending: str = '') -> None:
+    VERSION = '0.1.0'
+    ALGORITHMS = {
+        '': get_hashlib_alg('sha256'),
+        'sha256': get_hashlib_alg('sha256'),
+        'sha3_512': get_hashlib_alg('sha3_512'),
+        'scrypt': get_scrypt(),
+    }
+
+    def __init__(self,
+                 hashending: str = '',
+                 algorithm: str = '') -> None:
         self.hashending = hashending
+        self.algorithm = algorithm.lower()
         self.blocks = [self.get_genesis_block()]
 
     def __getitem__(self, i) -> MinBlock:
@@ -80,16 +128,28 @@ class MinChain():
     def _check_hash(self, hash: str) -> bool:
         return hash.endswith(self.hashending)
 
+    def _get_algorithm(self):
+        alg = self.ALGORITHMS.get(self.algorithm, None)
+        if alg is None:
+            alg = self.ALGORITHMS['']
+
+        return alg
+
     def log(self, message: str) -> None:
         # TODO
         print(message)
 
     def get_genesis_block(self) -> MinBlock:
+        genesis_data = {
+            "algorithm": self.algorithm,
+            "version": self.VERSION
+        }
         return MinBlock(
             0,
             datetime.datetime.utcnow(),
-            'Genesis',
+            json.dumps(genesis_data),
             'arbitrary',
+            algorithm=self._get_algorithm(),
             check_hash=self._check_hash
         )
 
@@ -100,6 +160,7 @@ class MinChain():
                 datetime.datetime.utcnow(),
                 data,
                 self.blocks[-1].hash,
+                algorithm=self._get_algorithm(),
                 check_hash=self._check_hash
             )
         )
@@ -136,7 +197,7 @@ class MinChain():
 
         return True
 
-    def fork(self, head: Union[str, int] ='latest') -> 'MinChain':
+    def fork(self, head: Union[str, int] = 'latest') -> 'MinChain':
         if head in ['latest', 'whole', 'all']:
             return copy.deepcopy(self)
 
