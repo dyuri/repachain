@@ -5,6 +5,12 @@ For experimenting and future projects.
 ## Install
 
 ```
+$ pip install git+https://github.com/dyuri/repachain
+```
+
+or
+
+```
 $ git clone https://github.com/dyuri/repachain
 $ pip install --user repachain
 ```
