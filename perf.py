@@ -14,7 +14,7 @@ TESTCASES = [
 
 for tc in TESTCASES:
     testcode = f"""
-from minblock import MinChain
+from minchain import MinChain
 
 bc = MinChain('{tc[0]}', '{tc[1]}')
 for i in range(10):
