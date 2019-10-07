@@ -7,6 +7,9 @@ import sys
 from typing import Callable, Optional, Union, List, Any
 
 
+__all__ = ['RepaBlock', 'RepaChain', 'InvalidBlockException']
+
+
 def int_to_bytes(n: int) -> bytes:
     return n.to_bytes((n.bit_length() + 7) // 8, 'big')
 
@@ -47,7 +50,7 @@ class InvalidBlockException(Exception):
     pass
 
 
-class MinBlock():
+class RepaBlock():
 
     def __init__(
             self,
@@ -111,17 +114,15 @@ class MinBlock():
         }
 
     def __str__(self) -> str:
-        return f"<MinBlock: '{self.data}' #{self.hash}>"
+        return f"<RepaBlock: '{self.data}' #{self.hash}>"
 
     def __repr__(self) -> str:
         return str(self)
 
 
-# TODO
-# - save / restore
-class MinChain():
+class RepaChain():
 
-    VERSION = '0.1.0'
+    VERSION = '1.0.0'
     ALGORITHMS = {
         '': get_hashlib_alg('sha256'),
         'sha256': get_hashlib_alg('sha256'),
@@ -136,7 +137,7 @@ class MinChain():
         self.algorithm = algorithm.lower()
         self.blocks = [self.get_genesis_block()]
 
-    def __getitem__(self, i) -> MinBlock:
+    def __getitem__(self, i) -> RepaBlock:
         return self.blocks[i]
 
     def _check_hash(self, hash: str) -> bool:
@@ -149,13 +150,13 @@ class MinChain():
 
         return alg
 
-    def get_genesis_block(self) -> MinBlock:
+    def get_genesis_block(self) -> RepaBlock:
         genesis_data = {
             "algorithm": self.algorithm,
             "hashending": self.hashending,
             "version": self.VERSION
         }
-        return MinBlock(
+        return RepaBlock(
             0,
             datetime.datetime.utcnow(),
             json.dumps(genesis_data),
@@ -166,7 +167,7 @@ class MinChain():
 
     def add_block(self, data: str) -> None:
         self.blocks.append(
-            MinBlock(
+            RepaBlock(
                 len(self.blocks),
                 datetime.datetime.utcnow(),
                 data,
@@ -230,7 +231,7 @@ class MinChain():
 
         for block in data:
             self.blocks.append(
-                MinBlock(
+                RepaBlock(
                     block['index'],
                     datetime.datetime.fromtimestamp(block['timestamp']),
                     block['data'],
@@ -250,21 +251,21 @@ class MinChain():
             json.dump(self.serialize(), jsonfile)
 
     @classmethod
-    def from_json(cls, jsondata: str) -> 'MinChain':
+    def from_json(cls, jsondata: str) -> 'RepaChain':
         self = cls()
         self.deserialize(json.loads(jsondata))
 
         return self
 
     @classmethod
-    def from_json_file(cls, file: str) -> 'MinChain':
+    def from_json_file(cls, file: str) -> 'RepaChain':
         self = cls()
         with gzip.open(file, 'rt', encoding="ascii") as jsonfile:
             self.deserialize(json.load(jsonfile))
 
         return self
 
-    def fork(self, head: Union[str, int] = 'latest') -> 'MinChain':
+    def fork(self, head: Union[str, int] = 'latest') -> 'RepaChain':
         if head in ['latest', 'whole', 'all']:
             return copy.deepcopy(self)
 
@@ -273,7 +274,7 @@ class MinChain():
         forked.blocks = forked.blocks[0:head + 1]
         return forked
 
-    def get_root(self, chain: 'MinChain') -> 'MinChain':
+    def get_root(self, chain: 'RepaChain') -> 'RepaChain':
         min_chain_size = min(self.chain_size, chain.chain_size)
         for i in range(1, min_chain_size):
             if self.blocks[i] != chain.blocks[i]:

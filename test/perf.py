@@ -14,9 +14,9 @@ TESTCASES = [
 
 for tc in TESTCASES:
     testcode = f"""
-from minchain import MinChain
+from repachain import RepaChain
 
-bc = MinChain('{tc[0]}', '{tc[1]}')
+bc = RepaChain('{tc[0]}', '{tc[1]}')
 for i in range(10):
     bc.add_block(f'block {{i}}')
 """
