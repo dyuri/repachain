@@ -1,4 +1,6 @@
 __pycache__/
 .mypy_cache/
+.python-version
+.tox/
 dist/
 src/repachain.egg-info
