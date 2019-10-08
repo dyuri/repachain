@@ -2,6 +2,11 @@
 
 For experimenting and future projects.
 
+## Requirements
+
+  - Python 3.6+
+  - *[optional]* [scrypt](https://pypi.org/project/scrypt/) for scrypt based hashing
+
 ## Install
 
 ```
