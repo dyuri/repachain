@@ -8,7 +8,7 @@ except (IOError, OSError):
 
 setup(
     name="repachain",
-    version='1.0.0',
+    version='1.0.1',
     url='https://github.com/dyuri/minchain',
     license='MIT',
     author='Gyuri Horák',

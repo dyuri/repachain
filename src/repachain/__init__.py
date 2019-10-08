@@ -124,10 +124,10 @@ class RepaChain():
 
     VERSION = '1.0.0'
     ALGORITHMS = {
-        '': get_hashlib_alg('sha256'),
-        'sha256': get_hashlib_alg('sha256'),
-        'sha3_512': get_hashlib_alg('sha3_512'),
-        'scrypt': get_scrypt(),
+        '': (lambda: get_hashlib_alg('sha256')),
+        'sha256': (lambda: get_hashlib_alg('sha256')),
+        'sha3_512': (lambda: get_hashlib_alg('sha3_512')),
+        'scrypt': get_scrypt,
     }
 
     def __init__(self,
@@ -148,7 +148,7 @@ class RepaChain():
         if alg is None:
             alg = self.ALGORITHMS['']
 
-        return alg
+        return alg()
 
     def get_genesis_block(self) -> RepaBlock:
         genesis_data = {
