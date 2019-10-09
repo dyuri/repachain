@@ -1,6 +1,8 @@
-__pycache__/
-.mypy_cache/
 .python-version
+.coverage
 .tox/
+.mypy_cache/
+__pycache__/
 dist/
+htmlcov/
 src/repachain.egg-info

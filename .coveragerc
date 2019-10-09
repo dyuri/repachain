@@ -1,0 +1,16 @@
+[paths]
+source =
+    src
+    repachain
+
+[run]
+branch = true
+parallel = true
+omit =
+    tests/*
+source =
+    repachain
+
+[report]
+show_missing = true
+precision = 2

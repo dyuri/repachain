@@ -43,6 +43,13 @@ repachain.InvalidBlockException: Wrong hash at block 1
 'whatever'
 ```
 
+## Testing
+
+```
+$ pip install --user tox pytest pytest-cov
+$ tox
+```
+
 ## TODO
 
   - proper documentation
