@@ -1,3 +1,4 @@
+import importlib
 import datetime
 import copy
 import json
@@ -7,7 +8,15 @@ import sys
 from typing import Callable, Optional, Union, List, Any
 
 
-__all__ = ['RepaBlock', 'RepaChain', 'InvalidBlockException']
+__all__ = ['RepaBlock', 'RepaChain', 'InvalidBlockException', 'AlgorithmMissingException']
+
+
+class InvalidBlockException(Exception):
+    pass
+
+
+class AlgorithmMissingException(Exception):
+    pass
 
 
 def int_to_bytes(n: int) -> bytes:
@@ -15,12 +24,12 @@ def int_to_bytes(n: int) -> bytes:
 
 
 def get_hashlib_alg(algname: str) -> Callable[[List[bytes], bytes], str]:
-    import hashlib
+    hashlib = importlib.import_module('hashlib')
 
     alg = getattr(hashlib, algname, None)
 
     if not alg:
-        sys.exit(f"Cannot use '{algname}' algorithm...")
+        raise AlgorithmMissingException(f"Cannot use '{algname}' algorithm")
 
     def hashfunc(data: List[bytes], nonce: bytes = b'') -> str:
         key = alg()
@@ -36,18 +45,14 @@ def get_hashlib_alg(algname: str) -> Callable[[List[bytes], bytes], str]:
 
 def get_scrypt() -> Callable[[List[bytes], bytes], str]:
     try:
-        import scrypt
+        scrypt = importlib.import_module('scrypt')
     except ImportError:
-        sys.exit("Cannot import 'scrypt'...")
+        raise AlgorithmMissingException("Cannot import 'scrypt'")
 
     def hashfunc(data: List[bytes], nonce: bytes = b'') -> str:
         return scrypt.hash(b'|'.join(data), nonce).hex()
 
     return hashfunc
-
-
-class InvalidBlockException(Exception):
-    pass
 
 
 class RepaBlock():
@@ -82,6 +87,7 @@ class RepaBlock():
     def verify(self):
         if self.hash != self.calculate_hash():
             raise InvalidBlockException("Wrong hash")
+        return True
 
     def calculate_hash(self) -> str:
         return self.algorithm(
