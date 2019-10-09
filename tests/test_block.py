@@ -1,5 +1,4 @@
 import datetime
-import pytest
 from repachain import RepaBlock, InvalidBlockException
 
 import pytest
