@@ -3,9 +3,8 @@ import datetime
 import copy
 import json
 import gzip
-import sys
 
-from typing import Callable, Optional, Union, List, Any
+from typing import Callable, Union, List, Any
 
 
 __all__ = ['RepaBlock', 'RepaChain', 'InvalidBlockException', 'AlgorithmMissingException']
@@ -191,31 +190,25 @@ class RepaChain():
     def verify(self) -> bool:
         prevblock = None
         for i, block in enumerate(self.blocks):
-            if i == 0:
+            if not prevblock:
                 # check version and algorithm
                 try:
                     bdata = json.loads(block.data)
                     if bdata["version"] != self.VERSION:
-                        raise InvalidBlockException(f'Wrong chain version "{bdata.version}"')
+                        raise InvalidBlockException(f'Wrong chain version "{bdata["version"]}"')
                     if bdata["algorithm"] != self.algorithm:
-                        raise InvalidBlockException(f'Wrong algorithm "{bdata.algorithm}"')
+                        raise InvalidBlockException(f'Wrong algorithm "{bdata["algorithm"]}"')
                 except (json.decoder.JSONDecodeError, KeyError):
                     raise InvalidBlockException('Invalid genesis block')
-
-                prevblock = block
-                continue
-
-            if prevblock:
+            else:
                 if block.index != i:
                     raise InvalidBlockException(f'Wrong block index at block {i}')
                 if prevblock.hash != block.previous_hash:
                     raise InvalidBlockException(f'Wrong previous hash at block {i}')
-                if block.hash != block.hashing():
-                    raise InvalidBlockException(f'Wrong hash at block {i}')
                 if prevblock.timestamp > block.timestamp:
                     raise InvalidBlockException(f'Backdating at block {i}')
-            else:
-                raise InvalidBlockException(f'Empty')
+
+            block.verify()
 
             prevblock = block
 
@@ -224,19 +217,20 @@ class RepaChain():
     def serialize(self) -> List[dict]:
         return [block.as_dict() for block in self.blocks]
 
-    def deserialize(self, data: List[dict]) -> None:
-        self.blocks = []
+    @classmethod
+    def deserialize(cls, data: List[dict]) -> 'RepaChain':
         try:
             genesis = json.loads(data[0]["data"])
-            self.algorithm = genesis["algorithm"]
-            self.hashending = genesis["hashending"]
-            if self.VERSION != genesis["version"]:
-                raise InvalidBlockException(f'Incompatible chain version "{genesis.version}"')
+            if cls.VERSION != genesis["version"]:
+                raise InvalidBlockException(f'Incompatible chain version "{genesis["version"]}"')
         except (json.decoder.JSONDecodeError, KeyError):
             raise InvalidBlockException("Invalid genesis data")
 
+        chain = cls(genesis["hashending"], genesis["algorithm"])
+        chain.blocks = []
+
         for block in data:
-            self.blocks.append(
+            chain.blocks.append(
                 RepaBlock(
                     block['index'],
                     datetime.datetime.fromtimestamp(block['timestamp']),
@@ -244,10 +238,12 @@ class RepaChain():
                     block['previous_hash'],
                     hash=block['hash'],
                     nonce=block['nonce'],
-                    algorithm=self._get_algorithm(),
-                    check_hash=self._check_hash
+                    algorithm=chain._get_algorithm(),
+                    check_hash=chain._check_hash
                 )
             )
+
+        return chain
 
     def to_json(self) -> str:
         return json.dumps(self.serialize())
@@ -258,18 +254,14 @@ class RepaChain():
 
     @classmethod
     def from_json(cls, jsondata: str) -> 'RepaChain':
-        self = cls()
-        self.deserialize(json.loads(jsondata))
-
-        return self
+        return cls.deserialize(json.loads(jsondata))
 
     @classmethod
     def from_json_file(cls, file: str) -> 'RepaChain':
-        self = cls()
         with gzip.open(file, 'rt', encoding="ascii") as jsonfile:
-            self.deserialize(json.load(jsonfile))
+            chain = cls.deserialize(json.load(jsonfile))
 
-        return self
+        return chain
 
     def fork(self, head: Union[str, int] = 'latest') -> 'RepaChain':
         if head in ['latest', 'whole', 'all']:
@@ -282,8 +274,8 @@ class RepaChain():
 
     def get_root(self, chain: 'RepaChain') -> 'RepaChain':
         min_chain_size = min(self.chain_size, chain.chain_size)
-        for i in range(1, min_chain_size):
-            if self.blocks[i] != chain.blocks[i]:
+        for i in range(1, min_chain_size + 1):
+            if self.blocks[i].hash != chain.blocks[i].hash:
                 return self.fork(i - 1)
 
         return self.fork(min_chain_size)

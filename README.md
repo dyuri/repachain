@@ -45,12 +45,13 @@ repachain.InvalidBlockException: Wrong hash at block 1
 
 ## Testing
 
+You need `pyenv` for running the testsuite for both python 3.6 and 3.7.
+
 ```
-$ pip install --user tox pytest pytest-cov
+$ pip install --user tox tox-pyenv pytest pytest-cov
 $ tox
 ```
 
 ## TODO
 
   - proper documentation
-  - tests
