@@ -1,4 +1,3 @@
-import importlib
 import datetime
 import copy
 import json
@@ -23,7 +22,7 @@ def int_to_bytes(n: int) -> bytes:
 
 
 def get_hashlib_alg(algname: str) -> Callable[[List[bytes], bytes], str]:
-    hashlib = importlib.import_module('hashlib')
+    import hashlib
 
     alg = getattr(hashlib, algname, None)
 
@@ -44,7 +43,7 @@ def get_hashlib_alg(algname: str) -> Callable[[List[bytes], bytes], str]:
 
 def get_scrypt() -> Callable[[List[bytes], bytes], str]:
     try:
-        scrypt = importlib.import_module('scrypt')
+        import scrypt
     except ImportError:
         raise AlgorithmMissingException("Cannot import 'scrypt'")
 
