@@ -82,7 +82,7 @@ class RepaBlock():
         else:
             self.hash = self.hashing()
 
-    def verify(self):
+    def verify(self) -> bool:
         if self.hash != self.calculate_hash():
             raise InvalidBlockException("Wrong hash")
         return True
